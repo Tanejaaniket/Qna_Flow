@@ -1,0 +1,128 @@
+"use client";
+
+import { db, questionAttachmentBucket, questionCollection } from "@/models/name";
+import { databases, storage } from "@/models/server/config";
+import { useAuthStore } from "@/store/auth";
+import { Loader2 } from "lucide-react";
+import { AppwriteException, ID } from "node-appwrite";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+
+
+function AskQuestion() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [content, setContent] = useState("");
+  const [tags, setTags] = useState("");
+  const [title, setTitle] = useState("");
+  const [file, setFile] = useState({});
+  const [fileName, setFileName] = useState("");
+
+  const {session} = useAuthStore();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(() => true);
+    setError(() => null);
+    try {
+      const id = ID.unique()
+      if (file) {
+        const response = await storage.createFile(
+          questionAttachmentBucket,
+          id,
+          file
+        );
+        setFile({})
+        console.log(response)
+      }
+      const questionDocument = await databases.createDocument(db, questionCollection, ID.unique(), {
+        title,
+        content,
+        tags: tags.split(",").map((tag) => tag.trim()),
+        authorId: session.userId,
+        attachmentId: file ? id : null
+      })
+
+      setTags(() => "");
+      setTitle(() => "");
+      setContent(() => "");
+      setFileName(() => "");
+      setLoading(() => false);
+      setError(() => null);
+      toast.success("Question created successfully")
+    } catch (err) {
+      setLoading(() => false);
+      setError(() => err instanceof AppwriteException ? err?.message : "Something went wrong while creating question");
+      toast.error(error)
+    }
+  }
+  return (
+    <div className="min-h-screen bg-neutral">
+      <h1 className="text-center text-4xl font-bold py-6">Ask a question</h1>
+      {/* Markdown editor */}
+
+      <div className="flex justify-center">
+        <form className="w-1/2 py-6 text-center" onSubmit={handleSubmit}>
+          <label className="label">Title: </label>
+          <input
+            type="text"
+            className="input input-bordered block w-full mb-5"
+            placeholder="Enter question title*"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+            }}
+            required
+          />
+          <label className="label">Question: </label>
+
+          <textarea
+            className="textarea textarea-bordered w-full mb-5"
+            height="30vh"
+            placeholder="Enter your question*"
+            value={content}
+            onChange={(e) => {
+              setContent(e.target.value);
+            }}
+            required
+          />
+
+          <label className="label">Attachments: </label>
+          <input
+            type="file"
+            className="file-input file-input-bordered block w-full mb-5"
+            value={fileName}
+            onChange={(e) => {
+              setFile(e.target.files[0]);
+              setFileName(e.target.files[0].name);
+            }}
+          />
+
+          <label className="label">Tags: </label>
+
+          <input
+            type="text"
+            className="input input-bordered block w-full"
+            placeholder="Enter tags seprated by commas (,)*"
+            value={tags}
+            onChange={(e) => {
+              setTags(e.target.value);
+            }}
+            required
+          />
+          {loading ? (
+            <button className="btn my-4" disabled>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting
+            </button>
+          ) : (
+            <button className="btn my-4" type="submit">
+              Submit Question
+            </button>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default AskQuestion;
